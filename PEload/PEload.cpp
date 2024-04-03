@@ -38,7 +38,7 @@ DWORD g_Address;
 IMAGE_DATA_DIRECTORY g_DataDirectory[IMAGE_NUMBEROF_DIRECTORY_ENTRIES];
 
 //打开EXE 将数据写入内存 返回数据指针
-char* OpenFile(char* File);
+char* OpenFile_(const char* File);
 
 //新打开文件
 char* NewOpenFile(char* File, PDWORD pFileLength);
@@ -164,7 +164,7 @@ int main()
 	char* ImageBuff = NULL;
 	// 	DWORD dwLength = 0;
 	// 	//FileBuff = NewOpenFile("F:\\PETool 1.0.0.5.exe", &dwLength);
-	FileBuff = OpenFile("test.dll");
+	FileBuff = OpenFile_("test.dll");
 	GetPEData(FileBuff);
 	//
 
@@ -281,7 +281,7 @@ int main()
 }
 
 
-char* OpenFile(char* File)
+char* OpenFile_(const char* File)
 {
 	if (File == NULL)
 	{
@@ -1526,8 +1526,8 @@ void ReadMappingBuffer()
 void regeditRead_Write()
 {
 	HKEY keyz;
-	char* Register = "Software\\Microsoft\\Windows\\CurrentVersion\\Run";//这是要写进的注册表的地方
-	char* Myapp = "C:\\Users\\Administrator\\Desktop\\ctfmon.exe";//这是我们需要自启动的程序的绝对路径
+	char* Register =(char*) "Software\\Microsoft\\Windows\\CurrentVersion\\Run";//这是要写进的注册表的地方
+	char* Myapp = (char*)"C:\\Users\\Administrator\\Desktop\\ctfmon.exe";//这是我们需要自启动的程序的绝对路径
 
 	//打开注册表启动项 
 	if (RegOpenKeyExA(HKEY_CURRENT_USER, Register, 0, KEY_ALL_ACCESS, &keyz) != ERROR_SUCCESS)
