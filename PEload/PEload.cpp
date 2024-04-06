@@ -106,6 +106,9 @@ void ShowImportTable(char* FileBuff);
 //打印绑定导入表
 void ShowBindingImportTable(char* FileBuff);
 
+//导入表注入
+void ImportTableInject(char* FileBuff,const char* DllName);
+
 //加密
 char* Encryption(char* FileBuff, DWORD dwLength);
 
@@ -164,7 +167,7 @@ int main()
 	char* ImageBuff = NULL;
 	// 	DWORD dwLength = 0;
 	// 	//FileBuff = NewOpenFile("F:\\PETool 1.0.0.5.exe", &dwLength);
-	FileBuff = OpenFile_("test.dll");
+	FileBuff = OpenFile_("Dbgview.exe");
 	GetPEData(FileBuff);
 	//
 
@@ -183,10 +186,10 @@ int main()
 
 
 	//--------拉伸-------
-	ImageBuff = PEStretch(FileBuff);
+	//ImageBuff = PEStretch(FileBuff);
 	//-----------------------
-	AddKnob(ImageBuff, 0x2000);
-	RestoreAndSave(ImageBuff);
+	//AddKnob(ImageBuff, 0x2000);
+	//RestoreAndSave(ImageBuff);
 
 	//在空白区域添加代码 -----
 	//LoadLibraryA("f.dll");
@@ -228,6 +231,11 @@ int main()
 	//----------打印绑定导入表---------
 	//ShowBindingImportTable(FileBuff);
 	//----------------------------
+
+	//----------导入表注入---------
+	char* newFileBuff = AddKonb(FileBuff, 0x2000);
+	ImportTableInject(newFileBuff, "test.dll");
+	//----------------------
 
 	//-----------获取窗口句柄--------
 	//HWND hwnd = FindWindow("EMOAGUI", NULL);
@@ -1681,4 +1689,159 @@ void TextFile()
 
 	free(lpFileData);
 	CloseHandle(hFile);
+}
+
+void ImportTableInject(char* FileBuff,const char* DllName)
+{
+	if (FileBuff == NULL)
+	{
+		return;
+	}
+	if (g_DataDirectory[1].VirtualAddress == 0)
+	{
+		printf("该文件没有导入表");
+		return;
+	}
+
+	IMAGE_IMPORT_DESCRIPTOR DataImport = { 0 };
+	IMAGE_THUNK_DATA thunk = { 0 };
+
+	DWORD Foa = RvaToFoa(g_DataDirectory[1].VirtualAddress);
+	memcpy(&DataImport, FileBuff + Foa, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+
+	//存放导入表起始指针
+	char* pImport = FileBuff + Foa;
+	
+
+	//获取最后一个节
+	std::list<IMAGE_SECTION_HEADER>::iterator it = --list_Section.end();
+	//记录在新节中填充数据后的位置
+	DWORD dwAddress = it->PointerToRawData;
+
+
+	//首先将导入表放入新节中
+	while (DataImport.FirstThunk != 0 && DataImport.Name != 0 && DataImport.OriginalFirstThunk != 0)
+	{
+		memcpy(FileBuff + dwAddress, pImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+		pImport += sizeof(IMAGE_IMPORT_DESCRIPTOR);
+		dwAddress += sizeof(IMAGE_IMPORT_DESCRIPTOR);
+		memcpy(&DataImport, pImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+	}
+	//空出2个为0的导入表 一个用来占位 一个设置为导入表结束结束
+	dwAddress += (sizeof(IMAGE_IMPORT_DESCRIPTOR) * 2);
+
+	//在修改目标表指向的导入表地址
+	g_DataDirectory[1].VirtualAddress = FoaToRva(it->PointerToRawData);
+	memcpy(image_Opeional.image_Opeional32.DataDirectory, g_DataDirectory, sizeof(g_DataDirectory));
+	memcpy(FileBuff + image_Dos.e_lfanew + 4 + sizeof(IMAGE_FILE_HEADER), &image_Opeional.image_Opeional32, image_File.SizeOfOptionalHeader);
+
+	//在重新获取新的导入表
+	IMAGE_IMPORT_DESCRIPTOR NewImport = { 0 };
+	memcpy(&NewImport, FileBuff + it->PointerToRawData, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+	char* pNewImport = FileBuff + it->PointerToRawData;
+
+	//创建一个Image_thunk_data
+	IMAGE_THUNK_DATA AddThunk = {};
+	//存放INT的起始指针
+	char* pInt = nullptr;
+	//存放IAT的起始指针
+	char* pIat = nullptr;
+
+	while (NewImport.FirstThunk != 0 && NewImport.Name != 0 && NewImport.OriginalFirstThunk != 0)
+	{
+		//将导入dll的名字放入新节中
+		DWORD Name = RvaToFoa(NewImport.Name);
+		printf("\n导入DLL名:%s\n", FileBuff + Name);
+		memcpy(FileBuff+ dwAddress, FileBuff + Name, strlen(FileBuff + Name) + 1);
+		//并将地址放入进去
+		NewImport.Name = FoaToRva(dwAddress);
+		//移动位置
+		dwAddress += (strlen(FileBuff + Name) + 1);
+
+		//获取INT
+		DWORD originalFirstThunk = RvaToFoa(NewImport.OriginalFirstThunk);
+		memcpy(&thunk, FileBuff + originalFirstThunk, sizeof(IMAGE_THUNK_DATA));
+		pInt = FileBuff + originalFirstThunk;
+		NewImport.OriginalFirstThunk = FoaToRva(dwAddress);
+		//NewImport.FirstThunk = FoaToRva(dwAddress);
+		
+		//将所有导入
+		while (thunk.u1.AddressOfData != 0)
+		{
+			if (image_File.SizeOfOptionalHeader == 0xE0)
+			{
+				pInt += sizeof(IMAGE_THUNK_DATA);
+			}
+			else
+			{
+				pInt += 8;
+			}
+			
+
+
+			//将INT放入新节
+			memcpy(FileBuff + dwAddress, &thunk, sizeof(IMAGE_THUNK_DATA));
+			dwAddress += sizeof(IMAGE_THUNK_DATA);
+			memcpy(&thunk, pInt, sizeof(IMAGE_THUNK_DATA));
+		}
+		//这里要留个0作为结束
+		dwAddress += sizeof(IMAGE_THUNK_DATA);
+
+		
+
+		//获取INT 修改INT里面的函数名
+		DWORD NewOriginalFirstThunk = RvaToFoa(NewImport.OriginalFirstThunk);
+		memcpy(&thunk, FileBuff + NewOriginalFirstThunk, sizeof(IMAGE_THUNK_DATA));
+		pInt = FileBuff + NewOriginalFirstThunk;
+		while (thunk.u1.AddressOfData != 0)
+		{
+			//DWORD pthunk = dwAddress;
+			if ((thunk.u1.AddressOfData & 0x80000000) != 0x80000000)
+			{
+				DWORD AddressOfData = RvaToFoa(thunk.u1.AddressOfData);
+				//函数名称移到新节
+				memcpy(FileBuff + dwAddress + sizeof(WORD), FileBuff + AddressOfData + sizeof(WORD), strlen(FileBuff + AddressOfData + sizeof(WORD)) + 1);
+
+
+
+
+				thunk.u1.AddressOfData = FoaToRva(dwAddress);
+				dwAddress += sizeof(WORD);
+				dwAddress +=  (strlen(FileBuff + AddressOfData + sizeof(WORD)) + 1);
+				//修改INT
+				memcpy(pInt, &thunk, sizeof(IMAGE_THUNK_DATA));
+			}
+
+			if (image_File.SizeOfOptionalHeader == 0xE0)
+			{
+				pInt += sizeof(IMAGE_THUNK_DATA);
+			}
+			else
+			{
+				pInt += 8;
+			}
+
+			memcpy(&thunk, pInt, sizeof(IMAGE_THUNK_DATA));
+		}
+
+
+
+		//修改写入新导入表中 并获取到下一个导入表
+		memcpy(pNewImport, &NewImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+		
+
+		pNewImport += sizeof(IMAGE_IMPORT_DESCRIPTOR);
+		memcpy(&NewImport, pNewImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+	}
+
+
+	//IMAGE_IMPORT_DESCRIPTOR AddImport = { 0 };
+
+
+
+	FILE* file = fopen("f.exe", "wb+");
+	fwrite(FileBuff, 1, g_FileLength, file);
+	fclose(file);
+	delete FileBuff;
+
 }
