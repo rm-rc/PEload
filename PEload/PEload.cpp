@@ -106,8 +106,11 @@ void ShowImportTable(char* FileBuff);
 //打印绑定导入表
 void ShowBindingImportTable(char* FileBuff);
 
+//导入表移动
+void ImportTableMove(char* FileBuff);
+
 //导入表注入
-void ImportTableInject(char* FileBuff,const char* DllName);
+void NewImportTableInject(char* FileBuff,const char* DllName);
 
 //加密
 char* Encryption(char* FileBuff, DWORD dwLength);
@@ -232,9 +235,14 @@ int main()
 	//ShowBindingImportTable(FileBuff);
 	//----------------------------
 
+	//----------导入表移动---------
+	//char* newFileBuff = AddKonb(FileBuff, 0x20000);
+	//ImportTableMove(newFileBuff);
+	//-------------------------------
+
 	//----------导入表注入---------
-	char* newFileBuff = AddKonb(FileBuff, 0x2000);
-	ImportTableInject(newFileBuff, "test.dll");
+	char* newFileBuff = AddKonb(FileBuff, 0x20000);
+	NewImportTableInject(newFileBuff, "test.dll");
 	//----------------------
 
 	//-----------获取窗口句柄--------
@@ -916,7 +924,7 @@ char* AddKonb(char* FileBuff, DWORD Length)
 
 	}
 	section.SizeOfRawData = GetAilgnmentSize(Length, image_Opeional.image_Opeional32.FileAlignment);
-	section.Characteristics = 0x88508880;
+	section.Characteristics = 0xc0000040;
 	section.PointerToRelocations = it->PointerToRelocations;
 	section.PointerToLinenumbers = it->PointerToLinenumbers;
 	section.NumberOfRelocations = it->NumberOfRelocations;
@@ -943,7 +951,7 @@ char* AddKonb(char* FileBuff, DWORD Length)
 
 		//修改内存大小
 		image_Opeional.image_Opeional32.SizeOfImage += Length;
-		image_Opeional.image_Opeional32.SizeOfImage = GetAilgnmentSize(image_Opeional.image_Opeional32.SizeOfImage, image_Opeional.image_Opeional32.SectionAlignment);
+		//image_Opeional.image_Opeional32.SizeOfImage = GetAilgnmentSize(image_Opeional.image_Opeional32.SizeOfImage, image_Opeional.image_Opeional32.SectionAlignment);
 		memcpy(FileBuff + image_Dos.e_lfanew + 4 + sizeof(IMAGE_FILE_HEADER), &image_Opeional, image_File.SizeOfOptionalHeader);
 
 
@@ -1233,7 +1241,7 @@ void ShowImportTable(char* FileBuff)
 		Foa = RvaToFoa(DataImport.FirstThunk);
 		memcpy(&thunk, FileBuff + Foa, sizeof(IMAGE_THUNK_DATA));
 		pIat = FileBuff + Foa;
-		printf("-------------INT--------------------\n");
+		printf("-------------IAT--------------------\n");
 		printf("起始地址：%x\n", DataImport.FirstThunk);
 		while (thunk.u1.AddressOfData != 0)
 		{
@@ -1691,7 +1699,7 @@ void TextFile()
 	CloseHandle(hFile);
 }
 
-void ImportTableInject(char* FileBuff,const char* DllName)
+void ImportTableMove(char* FileBuff)
 {
 	if (FileBuff == NULL)
 	{
@@ -1702,10 +1710,8 @@ void ImportTableInject(char* FileBuff,const char* DllName)
 		printf("该文件没有导入表");
 		return;
 	}
-
 	IMAGE_IMPORT_DESCRIPTOR DataImport = { 0 };
 	IMAGE_THUNK_DATA thunk = { 0 };
-
 	DWORD Foa = RvaToFoa(g_DataDirectory[1].VirtualAddress);
 	memcpy(&DataImport, FileBuff + Foa, sizeof(IMAGE_IMPORT_DESCRIPTOR));
 
@@ -1727,7 +1733,10 @@ void ImportTableInject(char* FileBuff,const char* DllName)
 		dwAddress += sizeof(IMAGE_IMPORT_DESCRIPTOR);
 		memcpy(&DataImport, pImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
 	}
-	//空出2个为0的导入表 一个用来占位 一个设置为导入表结束结束
+
+	DWORD dwLast = dwAddress;
+
+	//空出2个为0的导入表 一个用来注入占位 一个设置为导入表结束结束
 	dwAddress += (sizeof(IMAGE_IMPORT_DESCRIPTOR) * 2);
 
 	//在修改目标表指向的导入表地址
@@ -1765,7 +1774,7 @@ void ImportTableInject(char* FileBuff,const char* DllName)
 		NewImport.OriginalFirstThunk = FoaToRva(dwAddress);
 		//NewImport.FirstThunk = FoaToRva(dwAddress);
 		
-		//将所有导入
+		//将所有导入INT放入新节
 		while (thunk.u1.AddressOfData != 0)
 		{
 			if (image_File.SizeOfOptionalHeader == 0xE0)
@@ -1823,25 +1832,87 @@ void ImportTableInject(char* FileBuff,const char* DllName)
 
 			memcpy(&thunk, pInt, sizeof(IMAGE_THUNK_DATA));
 		}
-
-
+		
+		
 
 		//修改写入新导入表中 并获取到下一个导入表
 		memcpy(pNewImport, &NewImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
-		
-
 		pNewImport += sizeof(IMAGE_IMPORT_DESCRIPTOR);
 		memcpy(&NewImport, pNewImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
 	}
 
 
-	//IMAGE_IMPORT_DESCRIPTOR AddImport = { 0 };
-
-
-
 	FILE* file = fopen("f.exe", "wb+");
-	fwrite(FileBuff, 1, g_FileLength, file);
+	fwrite(FileBuff, 1, g_FileLength + 0x20000, file);
 	fclose(file);
 	delete FileBuff;
 
+}
+
+//重写导入表注入
+void NewImportTableInject(char* FileBuff,const char* DllName)
+{
+	if (FileBuff == NULL)
+	{
+		return;
+	}
+	if (g_DataDirectory[1].VirtualAddress == 0)
+	{
+		printf("该文件没有导入表");
+		return;
+	}
+	//获取老的导入表的头节点
+	IMAGE_IMPORT_DESCRIPTOR OldImport = { 0 };
+	DWORD Foa = RvaToFoa(g_DataDirectory[1].VirtualAddress);
+	memcpy(&OldImport, FileBuff + Foa, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+
+	//存放导入表起始指针
+	char* pOldImport = FileBuff + Foa;
+	
+	//获取最后一个节
+	std::list<IMAGE_SECTION_HEADER>::iterator it = --list_Section.end();
+	//记录在新节中填充数据后的位置
+	DWORD nAddrFlag = it->PointerToRawData;
+	//老的导入表结束位置
+	DWORD nOldImportLast = 0;
+	//记录导入表数量
+	DWORD nOldImportNumber = 0;
+	DWORD nNewImportNumber = 0;
+	//首先将导入表放入新节中
+	while (OldImport.FirstThunk != 0 && OldImport.Name != 0 && OldImport.OriginalFirstThunk != 0)
+	{
+		
+		pOldImport += sizeof(IMAGE_IMPORT_DESCRIPTOR);
+		nOldImportNumber++;
+		memcpy(&OldImport, pOldImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+	}
+	
+	
+	
+	//将老的导入表放入新的节表中 并按照新的数量来放入
+	memcpy(FileBuff + nAddrFlag, FileBuff + Foa, sizeof(IMAGE_IMPORT_DESCRIPTOR)* nOldImportNumber);
+	//记录老的导入表结束的位置
+	nOldImportLast = nAddrFlag + (sizeof(IMAGE_IMPORT_DESCRIPTOR) * nOldImportNumber);
+	//修改目录表地址
+	image_Opeional.image_Opeional32.DataDirectory[1].VirtualAddress = FoaToRva(nAddrFlag);
+	memcpy(FileBuff + image_Dos.e_lfanew + 4 + sizeof(IMAGE_FILE_HEADER), &image_Opeional.image_Opeional32, image_File.SizeOfOptionalHeader);
+	//地址位移
+	//将老的导入表数量放入新的导入表数量中 并加2 一个预留放注入的dll 一个为结束位
+	nNewImportNumber = nOldImportNumber + 2;
+	nAddrFlag += (sizeof(IMAGE_IMPORT_DESCRIPTOR) * nNewImportNumber);
+	//新增一个导入表
+	IMAGE_IMPORT_DESCRIPTOR	AddImport = {0};
+	memcpy(FileBuff + nAddrFlag, DllName, strlen(DllName) + 1);
+	AddImport.Name = FoaToRva(nAddrFlag);
+	nAddrFlag += (strlen(DllName) + 1);
+	DWORD oft = 0x8000000F;
+	memcpy(FileBuff + nAddrFlag, &oft, sizeof(DWORD));
+	AddImport.OriginalFirstThunk = FoaToRva(nAddrFlag);
+	AddImport.FirstThunk = FoaToRva(nAddrFlag);
+	memcpy(FileBuff + nOldImportLast, &AddImport, sizeof(IMAGE_IMPORT_DESCRIPTOR));
+	
+	FILE* file = fopen("f.exe", "wb+");
+	fwrite(FileBuff, 1, g_FileLength + 0x20000, file);
+	fclose(file);
+	delete FileBuff;
 }
