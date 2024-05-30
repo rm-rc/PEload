@@ -175,7 +175,7 @@ int main()
 	char* ImageBuff = NULL;
 	// 	DWORD dwLength = 0;
 	// 	//FileBuff = NewOpenFile("F:\\PETool 1.0.0.5.exe", &dwLength);
-	FileBuff = OpenFile_("Dbgview.exe");
+	FileBuff = OpenFile_("STLFun.exe");
 	GetPEData(FileBuff);
 	//
 
@@ -246,9 +246,13 @@ int main()
 	//-------------------------------
 
 	//----------导入表注入---------
-	char* newFileBuff = AddKonb(FileBuff, 0x20000);
-	NewImportTableInject(newFileBuff, "test.dll");
+	//char* newFileBuff = AddKonb(FileBuff, 0x20000);
+	//NewImportTableInject(newFileBuff, "test.dll");
 	//----------------------
+	ShowTLSTable(FileBuff);
+	//-----打印STL数据----
+
+	//------------------
 
 	//-----------获取窗口句柄--------
 	//HWND hwnd = FindWindow("EMOAGUI", NULL);
@@ -1937,6 +1941,21 @@ void ShowTLSTable(char* FileBuff)
 	IMAGE_TLS_DIRECTORY Image_TLS = { 0 };
 	DWORD Foa = RvaToFoa(g_DataDirectory[9].VirtualAddress);
 	memcpy(&Image_TLS, FileBuff + Foa, sizeof(IMAGE_TLS_DIRECTORY));
+
+	DWORD StartFoa = RvaToFoa( Image_TLS.StartAddressOfRawData - image_Opeional.image_Opeional32.ImageBase);
+	printf("线程起始局部变量地址 FOA = %x 结束地址 = %x\n", 
+		RvaToFoa( Image_TLS.StartAddressOfRawData - image_Opeional.image_Opeional32.ImageBase),
+		RvaToFoa( Image_TLS.EndAddressOfRawData - image_Opeional.image_Opeional32.ImageBase));
+
+	printf("索引值 %x\n", RvaToFoa(  Image_TLS.AddressOfIndex - image_Opeional.image_Opeional32.ImageBase));
+	char* pCallAddr = FileBuff + (RvaToFoa( Image_TLS.AddressOfCallBacks - image_Opeional.image_Opeional32.ImageBase));
+	DWORD dwFunAddr = *(PDWORD)pCallAddr;
+	while (dwFunAddr != 0)
+	{
+		printf("TLS 回调地址 %x\n", dwFunAddr);
+		pCallAddr += sizeof(DWORD);
+		dwFunAddr = *(PDWORD)pCallAddr;
+	}
 
 
 }
