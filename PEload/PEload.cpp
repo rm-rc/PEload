@@ -112,6 +112,11 @@ void ImportTableMove(char* FileBuff);
 //导入表注入
 void NewImportTableInject(char* FileBuff,const char* DllName);
 
+//显示TLS结构
+void ShowTLSTable(char* FileBuff);
+
+
+
 //加密
 char* Encryption(char* FileBuff, DWORD dwLength);
 
@@ -1915,4 +1920,23 @@ void NewImportTableInject(char* FileBuff,const char* DllName)
 	fwrite(FileBuff, 1, g_FileLength + 0x20000, file);
 	fclose(file);
 	delete FileBuff;
+}
+
+void ShowTLSTable(char* FileBuff)
+{
+	if (FileBuff == NULL)
+	{
+		return;
+	}
+	if (g_DataDirectory[9].VirtualAddress == 0)
+	{
+		printf("该文件没有TLS");
+		return;
+	}
+	//获取老的导入表的头节点
+	IMAGE_TLS_DIRECTORY Image_TLS = { 0 };
+	DWORD Foa = RvaToFoa(g_DataDirectory[9].VirtualAddress);
+	memcpy(&Image_TLS, FileBuff + Foa, sizeof(IMAGE_TLS_DIRECTORY));
+
+
 }
