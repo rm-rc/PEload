@@ -177,7 +177,7 @@ int main()
 	char* ImageBuff = NULL;
 	// 	DWORD dwLength = 0;
 	// 	//FileBuff = NewOpenFile("F:\\PETool 1.0.0.5.exe", &dwLength);
-	FileBuff = OpenFile_("STLFun.exe");
+	FileBuff = OpenFile_("Dbgview.exe");
 	GetPEData(FileBuff);
 	//
 
@@ -251,12 +251,18 @@ int main()
 	//char* newFileBuff = AddKonb(FileBuff, 0x20000);
 	//NewImportTableInject(newFileBuff, "test.dll");
 	//----------------------
-	ShowTLSTable(FileBuff);
+	
 	//-----打印STL数据----
-
+	//ShowTLSTable(FileBuff);
 	//------------------
+	// 
+	//--新增STL数据--
 
-	//-----------获取窗口句柄--------
+	char* newFileBuff = AddKonb(FileBuff, 0x20000);
+	AddTLSTable(newFileBuff);
+	//----------------
+
+		//-----------获取窗口句柄--------
 	//HWND hwnd = FindWindow("EMOAGUI", NULL);
 	//RECT rect;
 	//SetWindowText(hwnd, "大佬的有度");
@@ -935,7 +941,7 @@ char* AddKonb(char* FileBuff, DWORD Length)
 
 	}
 	section.SizeOfRawData = GetAilgnmentSize(Length, image_Opeional.image_Opeional32.FileAlignment);
-	section.Characteristics = 0xc0000040;
+	section.Characteristics = 0xe0000040;
 	section.PointerToRelocations = it->PointerToRelocations;
 	section.PointerToLinenumbers = it->PointerToLinenumbers;
 	section.NumberOfRelocations = it->NumberOfRelocations;
@@ -1985,13 +1991,31 @@ void AddTLSTable(char* FileBuff)
 
 	//获取最后一个节
 	std::list<IMAGE_SECTION_HEADER>::iterator it = --list_Section.end();
-
+	DWORD tsl = it->PointerToRawData;
 	//写入TLS结构0041A13C
 	IMAGE_TLS_DIRECTORY strTLS = { 0 };
-	strTLS.AddressOfIndex = it->PointerToRawData + sizeof(IMAGE_TLS_DIRECTORY);
 
-	memcpy(FileBuff + it->SizeOfRawData, ShellCode, sizeof(ShellCode));
+	tsl += sizeof(IMAGE_TLS_DIRECTORY);
 
+	strTLS.AddressOfIndex = image_Opeional.image_Opeional32.ImageBase + FoaToRva(tsl);
 	
+	tsl += sizeof(DWORD);
+	strTLS.AddressOfCallBacks = image_Opeional.image_Opeional32.ImageBase + FoaToRva(tsl);
+	DWORD addrva = image_Opeional.image_Opeional32.ImageBase + FoaToRva(tsl + (sizeof(DWORD)*2));
+	memcpy(FileBuff + tsl, &addrva, sizeof(DWORD));
+	tsl += (sizeof(DWORD) * 2);
+	memcpy(FileBuff + tsl, ShellCode, sizeof(ShellCode));
+	memcpy(FileBuff + it->PointerToRawData, &strTLS, sizeof(IMAGE_TLS_DIRECTORY));
+	g_DataDirectory[9].VirtualAddress = it->VirtualAddress;
 
+	//去除ASLR 在预编译的EXE上禁止IMAGE_OPTIONAL_HEADER中的ASLR标志
+
+	image_Opeional.image_Opeional32.DllCharacteristics ^= 0x40;
+	memcpy(image_Opeional.image_Opeional32.DataDirectory, g_DataDirectory, sizeof(g_DataDirectory));
+	memcpy(FileBuff + image_Dos.e_lfanew + 4 + sizeof(IMAGE_FILE_HEADER), &image_Opeional.image_Opeional32, image_File.SizeOfOptionalHeader);
+	
+	FILE* file = fopen("test.exe", "wb+");
+	fwrite(FileBuff, 1, g_FileLength + 0x20000, file);
+	fclose(file);
+	delete FileBuff;
 }
