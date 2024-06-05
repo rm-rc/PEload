@@ -2029,9 +2029,82 @@ void AddTLSTable(char* FileBuff)
 
 DWORD JmpConversion(char* Address)
 {
-	BYTE byte = *(PBYTE)Address;
-	//首先左移4
+	DWORD dwSize = sizeof(DWORD) + 1;
+	DWORD dwAddress = (DWORD)Address;
+	dwAddress += dwSize;
+	DWORD dwNum = *(PDWORD)(Address + 1);
+	
 
+	printf("\nJMP %x", dwAddress + dwNum);
+	
+	return dwSize;
+
+}
+
+DWORD CallConversion(char* Address)
+{
+	DWORD dwSize = sizeof(DWORD) + 1;
+	DWORD dwAddress = (DWORD)Address;
+	dwAddress += dwSize;
+	DWORD dwNum = *(PDWORD)(Address + 1);
+
+
+	printf("\nCALL %x", dwAddress + dwNum);
+
+	return dwSize;
+
+}
+
+DWORD PushConversion(char* Address,BYTE rvalue)
+{
+
+	switch (rvalue)
+	{
+	case 0x0:
+	{
+		printf("\nPUSH EAX");
+	}
+	break;
+	case 0x1:
+	{
+		printf("\nPUSH ECX");
+	}
+	break;
+	case 0x2:
+	{
+		printf("\nPUSH EDX");
+	}
+	break;
+	case 0x3:
+	{
+		printf("\nPUSH EBX");
+	}
+	break;
+	case 0x4:
+	{
+		printf("\nPUSH ESP");
+	}
+	break;
+	case 0x5:
+	{
+		printf("\nPUSH EBP");
+	}
+	break;
+	case 0x6:
+	{
+		printf("\nPUSH ESI");
+	}
+	break;
+	case 0x7:
+	{
+		printf("\nPUSH EDI");
+	}
+	break;
+	
+	default:
+		break;
+	}
+	return 1;
 }
 
 void CodeConversion(char* FileBuff)
@@ -2039,87 +2112,120 @@ void CodeConversion(char* FileBuff)
 	//首先获取Oep
 	char* Oep = FileBuff + RvaToFoa(image_Opeional.image_Opeional32.AddressOfEntryPoint);
 
-	BYTE byte = *(PBYTE)Oep;
+	DWORD dwFlag = 0;
+	for (size_t i = 0; i < g_FileLength; i++)
+	{
+		BYTE byte = *(PBYTE)Oep;
+		//首先右移一字节
+		switch (byte >> 4)
+		{
+		case 0x1:
+		{
 
-	//首先右移一字节
-	switch (byte<<4)
-	{
-	case 0x1:
-	{
-		
-	}
-	break;
-	case 0x2:
-	{
-		
-	}
-	break;
-	case 0x3:
-	{
-	}
-	break;
-	case 0x4:
-	{
-		
-	}
-	break;
-	case 0x5:
-	{
-		
-	}
-	break;
-	case 0x6:
-	{
-		
-	}
-	break;
-	case 0x7:
-	{
-		
-	}
-	break;
-	case 0x8:
-	{
-	}
-	break;
-	case 0x9:
-	{
-		
-	}
-	break;
-	case 0xa:
-	{
-		
-	}
-	break;
-	case 0xb:
-	{
-		
-	}
-	break;
-	case 0xc:
-	{
-		
-	}
-	break;
-	case 0xd:
-	{
-		
-	}
-	break;
-	case 0xe:
-	{
-
-		
-	}
-	break;
-	case 0xf:
-	{
-		
-	}
-	break;
-	default:
+		}
 		break;
+		case 0x2:
+		{
+
+		}
+		break;
+		case 0x3:
+		{
+		}
+		break;
+		case 0x4:
+		{
+
+		}
+		break;
+		case 0x5:
+		{
+			switch ((BYTE)(byte & 0xf))
+			{
+			case 0x0:
+			case 0x1:
+			case 0x2:
+			case 0x3:
+			case 0x4:
+			case 0x5:
+			case 0x6:
+			case 0x7:
+			{
+				PushConversion(Oep, (BYTE)(byte & 0xf));
+			}
+			default:
+				break;
+			}
+		}
+		break;
+		case 0x6:
+		{
+
+		}
+		break;
+		case 0x7:
+		{
+
+		}
+		break;
+		case 0x8:
+		{
+		}
+		break;
+		case 0x9:
+		{
+
+		}
+		break;
+		case 0xa:
+		{
+
+		}
+		break;
+		case 0xb:
+		{
+
+		}
+		break;
+		case 0xc:
+		{
+
+		}
+		break;
+		case 0xd:
+		{
+
+		}
+		break;
+		case 0xe:
+		{
+			switch ((BYTE)(byte & 0xf))
+			{
+			case 0x8:
+			{
+				dwFlag = CallConversion(Oep);
+			}
+			break;
+			case 0x9:
+			{
+				dwFlag = JmpConversion(Oep);
+			}
+			break;
+			default:
+				break;
+			}
+
+		}
+		break;
+		case 0xf:
+		{
+
+		}
+		break;
+		default:
+			break;
+		}
+		Oep += dwFlag;
 	}
 	//e8 42 04 00 00
 	// CALL Jz
@@ -2131,7 +2237,6 @@ void CodeConversion(char* FileBuff)
 
 	//---------取上面返回5个字节
 
-	byte = *(PBYTE)(Oep + 5);
 
 
 	//e9 25 fe ff ff
