@@ -118,6 +118,8 @@ void ShowTLSTable(char* FileBuff);
 //添加TLS结构
 void AddTLSTable(char* FileBuff);
 
+//IA-32编码解析
+void CodeConversion(char* FileBuff);
 
 //加密
 char* Encryption(char* FileBuff, DWORD dwLength);
@@ -258,9 +260,13 @@ int main()
 	// 
 	//--新增STL数据--
 
-	char* newFileBuff = AddKonb(FileBuff, 0x20000);
-	AddTLSTable(newFileBuff);
+	//char* newFileBuff = AddKonb(FileBuff, 0x20000);
+	//AddTLSTable(newFileBuff);
 	//----------------
+
+	//----------IA32 转换-----
+	CodeConversion(FileBuff);
+	//-------
 
 		//-----------获取窗口句柄--------
 	//HWND hwnd = FindWindow("EMOAGUI", NULL);
@@ -2018,4 +2024,122 @@ void AddTLSTable(char* FileBuff)
 	fwrite(FileBuff, 1, g_FileLength + 0x20000, file);
 	fclose(file);
 	delete FileBuff;
+}
+
+
+DWORD JmpConversion(char* Address)
+{
+	BYTE byte = *(PBYTE)Address;
+	//首先左移4
+
+}
+
+void CodeConversion(char* FileBuff)
+{
+	//首先获取Oep
+	char* Oep = FileBuff + RvaToFoa(image_Opeional.image_Opeional32.AddressOfEntryPoint);
+
+	BYTE byte = *(PBYTE)Oep;
+
+	//首先右移一字节
+	switch (byte<<4)
+	{
+	case 0x1:
+	{
+		
+	}
+	break;
+	case 0x2:
+	{
+		
+	}
+	break;
+	case 0x3:
+	{
+	}
+	break;
+	case 0x4:
+	{
+		
+	}
+	break;
+	case 0x5:
+	{
+		
+	}
+	break;
+	case 0x6:
+	{
+		
+	}
+	break;
+	case 0x7:
+	{
+		
+	}
+	break;
+	case 0x8:
+	{
+	}
+	break;
+	case 0x9:
+	{
+		
+	}
+	break;
+	case 0xa:
+	{
+		
+	}
+	break;
+	case 0xb:
+	{
+		
+	}
+	break;
+	case 0xc:
+	{
+		
+	}
+	break;
+	case 0xd:
+	{
+		
+	}
+	break;
+	case 0xe:
+	{
+
+		
+	}
+	break;
+	case 0xf:
+	{
+		
+	}
+	break;
+	default:
+		break;
+	}
+	//e8 42 04 00 00
+	// CALL Jz
+
+	//J 相对偏移 
+	//z 表示位数 运行在32位 则是4字节
+	
+	//得到汇编指令位为 ： CALL 下一行地址加 442
+
+	//---------取上面返回5个字节
+
+	byte = *(PBYTE)(Oep + 5);
+
+
+	//e9 25 fe ff ff
+
+	//Jmp Jz
+
+	//J 相对偏移 
+	//z 表示位数 运行在32位 则是4字节
+
+	//得到指令 JMP 下一行地址加 FFFFFE25
 }
