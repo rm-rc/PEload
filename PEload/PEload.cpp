@@ -2027,6 +2027,17 @@ void AddTLSTable(char* FileBuff)
 }
 
 
+PCHAR ModRM_Addressing(char* Address,BYTE modrm)
+{
+	if (modrm)
+	{
+
+	}
+		
+	
+
+}
+
 DWORD JmpConversion(char* Address)
 {
 	DWORD dwSize = sizeof(DWORD) + 1;
@@ -2107,6 +2118,12 @@ DWORD PushConversion(char* Address,BYTE rvalue)
 	return 1;
 }
 
+
+DWORD LeaConversion(char* Address)
+{
+
+}
+
 void CodeConversion(char* FileBuff)
 {
 	//首先获取Oep
@@ -2116,7 +2133,7 @@ void CodeConversion(char* FileBuff)
 	for (size_t i = 0; i < g_FileLength; i++)
 	{
 		BYTE byte = *(PBYTE)Oep;
-		//首先右移一字节
+		//首先右移一字节36 47 00 8b c8 33
 		switch (byte >> 4)
 		{
 		case 0x1:
@@ -2151,7 +2168,7 @@ void CodeConversion(char* FileBuff)
 			case 0x6:
 			case 0x7:
 			{
-				PushConversion(Oep, (BYTE)(byte & 0xf));
+				dwFlag = PushConversion(Oep, (BYTE)(byte & 0xf));
 			}
 			default:
 				break;
@@ -2170,6 +2187,20 @@ void CodeConversion(char* FileBuff)
 		break;
 		case 0x8:
 		{
+			switch ((BYTE)(byte & 0xf))
+			{
+			case 0xD:
+			{
+				//8b ec a1 a0 36 47 
+				//LEA Gv M
+				//ModR/M = EC
+				//二进制 = 1110 1100
+				//Mod = 11 Reg = 101 R/M = 100
+				//LEA EBP,ESP
+				dwFlag = LeaConversion(Oep);
+			}
+			break;
+			}
 		}
 		break;
 		case 0x9:
